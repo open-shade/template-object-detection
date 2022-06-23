@@ -11,7 +11,14 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools',
+        'transformers',
+        'torch',
+        'cython',
+        'datasets',
+        "Pillow"
+    ],
     zip_safe=True,
     maintainer='lidar',
     maintainer_email='lidar@todo.todo',
