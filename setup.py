@@ -17,7 +17,11 @@ setup(
         'torch',
         'cython',
         'datasets',
-        "Pillow"
+        "Pillow",
+        'charset-normalizer==2.0.0',
+        'packaging==20.9',
+        'numpy==1.18.5'
+
     ],
     zip_safe=True,
     maintainer='lidar',

@@ -36,13 +36,13 @@ class MinimalSubscriber(Node):
 
 
 def main(args=None):
+    print('Hi from resnet_ros2.')
+
     rclpy.init(args=args)
 
     minimal_subscriber = MinimalSubscriber()
 
     rclpy.spin(minimal_subscriber)
-
-    print('Hi from resnet_ros2.')
 
     dataset = load_dataset('huggingface/cats-image')
 
