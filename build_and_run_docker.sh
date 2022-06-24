@@ -1,10 +1,12 @@
-docker build . -t shaderobotics/resnet-ros2
+sudo docker build . -t shaderobotics/resnet-ros2
 
 echo "Starting container..."
 echo "====================="
 
-# docker run -it --entrypoint=/bin/bash shaderobotics/resnet-ros2 -i
+sudo docker run -it \
+  -v /dev/shm:/dev/shm --entrypoint=/bin/bash \
+  shaderobotics/resnet-ros2 -i
 
-docker run -a STDOUT \
-  -v /dev/shm:/dev/shm \
-  shaderobotics/resnet-ros2
+#sudo docker run -a STDOUT \
+#  -v /dev/shm:/dev/shm \
+#  shaderobotics/resnet-ros2
