@@ -1,11 +1,11 @@
 import numpy
 from transformers import AutoFeatureExtractor, ResNetForImageClassification
 import torch
-from datasets import load_dataset
 from PIL import Image as PilImage
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from std_msgs.msg import String
 from cv_bridge import CvBridge
 
 
@@ -24,14 +24,21 @@ def predict(image: Image):
     return predicted_label, model.config.id2label[predicted_label]
 
 
-class MinimalSubscriber(Node):
+class RosIO(Node):
     def __init__(self):
         super().__init__('minimal_subscriber')
-        self.subscription = self.create_subscription(
+        self.image_subscription = self.create_subscription(
             Image,
-            '/image/image_raw',
+            '/resnet/sub/image_raw',
             self.listener_callback,
-            10)
+            10
+        )
+
+        self.result_publisher = self.create_publisher(
+            String,
+            '/resnet/pub/result',
+            1
+        )
 
     def listener_callback(self, msg: Image):
         # self.get_logger().info(msg.data)
@@ -42,22 +49,19 @@ class MinimalSubscriber(Node):
         # cv2.waitKey(0)
         converted_image = PilImage.fromarray(numpy.uint8(cv_image), 'RGB')
         # converted_image.show('image')
-        print(predict(converted_image))
+        result = str(predict(converted_image))
+        print(f'Result: {result}')
+        self.result_publisher.publish(result)
 
 
 def main(args=None):
-    print('Hi from resnet_ros2.')
+    print('Resnet Started')
 
     rclpy.init(args=args)
 
-    minimal_subscriber = MinimalSubscriber()
+    minimal_subscriber = RosIO()
 
     rclpy.spin(minimal_subscriber)
-
-    dataset = load_dataset('huggingface/cats-image')
-
-    for i in dataset['test']['image']:
-        print(predict(i))
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
