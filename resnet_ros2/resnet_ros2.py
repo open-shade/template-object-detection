@@ -51,7 +51,10 @@ class RosIO(Node):
         # converted_image.show('image')
         result = str(predict(converted_image))
         print(f'Result: {result}')
-        self.result_publisher.publish(result)
+
+        msg = String()
+        msg.data = result
+        self.result_publisher.publish(msg)
 
 
 def main(args=None):
