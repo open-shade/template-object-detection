@@ -4,7 +4,13 @@ FROM shaderobotics/ros:${ROS_VERSION}
 ARG ROS_VERSION
 ENV ROS_VERSION=$ROS_VERSION
 
+ARG ORGANIZATION
+ARG MODEL_VERSION
+
+ENV MODEL_NAME="$ORGANIZATION"/"$MODEL_VERSION"
+
 WORKDIR /home/shade/shade_ws
+
 
 RUN apt update && \
     apt install -y curl && \
@@ -22,6 +28,8 @@ RUN apt update && \
 COPY . ./src/resnet_ros2
 
 RUN pip3 install ./src/resnet_ros2 && \
+    : "Install the model" && \
+    python3 -c "from transformers import AutoFeatureExtractor; AutoFeatureExtractor.from_pretrained('${MODEL_NAME}')" && \
     colcon build
 
 ENTRYPOINT ["/home/shade/shade_ws/start.sh"]

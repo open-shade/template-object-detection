@@ -1,4 +1,5 @@
 import numpy
+import os
 from transformers import AutoFeatureExtractor, ResNetForImageClassification
 import torch
 from PIL import Image as PilImage
@@ -8,10 +9,12 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge
 
+ALGO_VERSION = os.getenv("MODEL_NAME")
+
 
 def predict(image: Image):
-    feature_extractor = AutoFeatureExtractor.from_pretrained('microsoft/resnet-101')
-    model = ResNetForImageClassification.from_pretrained('microsoft/resnet-101')
+    feature_extractor = AutoFeatureExtractor.from_pretrained(ALGO_VERSION)
+    model = ResNetForImageClassification.from_pretrained(ALGO_VERSION)
 
     inputs = feature_extractor(image, return_tensors="pt")
 
