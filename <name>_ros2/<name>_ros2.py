@@ -1,6 +1,6 @@
 import numpy
 import os
-from transformers import AutoFeatureExtractor, ResNetForImageClassification
+from transformers import AutoFeatureExtractor
 import torch
 from PIL import Image as PilImage
 import rclpy
@@ -11,10 +11,14 @@ from cv_bridge import CvBridge
 
 ALGO_VERSION = os.getenv("MODEL_NAME")
 
+if not ALGO_VERSION:
+    ALGO_VERSION = '<default here>'
+
 
 def predict(image: Image):
     feature_extractor = AutoFeatureExtractor.from_pretrained(ALGO_VERSION)
-    model = ResNetForImageClassification.from_pretrained(ALGO_VERSION)
+    # model = <name>ForImageClassification.from_pretrained(ALGO_VERSION)
+    # Enter line here
 
     inputs = feature_extractor(image, return_tensors="pt")
 
@@ -32,14 +36,14 @@ class RosIO(Node):
         super().__init__('minimal_subscriber')
         self.image_subscription = self.create_subscription(
             Image,
-            '/resnet/sub/image_raw',
+            '/<name>/sub/image_raw',
             self.listener_callback,
             10
         )
 
         self.result_publisher = self.create_publisher(
             String,
-            '/resnet/pub/result',
+            '/<name>/pub/result',
             1
         )
 
@@ -61,7 +65,7 @@ class RosIO(Node):
 
 
 def main(args=None):
-    print('Resnet Started')
+    print('<name> Started')
 
     rclpy.init(args=args)
 
