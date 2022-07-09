@@ -26,10 +26,10 @@ def predict(image: Image):
         output = model(**inputs)
 
     # Convert output to be between 0 and 1
-    logits = torch.nn.functional.softmax(output.logits[0], dim=2)
-    bboxes = output.pred_boxes[0]
+    sizes = torch.tensor([tuple(reversed(image.size))])
+    result = feature_extractor.post_process(output, sizes)
     
-    return logits, bboxes
+    return result[0]
 
 
 class RosIO(Node):
@@ -56,42 +56,35 @@ class RosIO(Node):
             1
         )
 
-    def get_detection_arr(self, logits, boxes):
+    def get_detection_arr(self, result):
         dda = Detection2DArray()
 
         detections = []
         self.counter += 1
-        
-        for i in range(len(logits)):
-            detection = Detection2D()
 
-            # don't send boudning boxes that have no object in them
-            if logits[i].argmax(-1).item() == len(logits[i]) - 1:
-                continue
+        for i in range(len(result['boxes'])):
+            detection = Detection2D()
 
             detection.header.stamp = self.get_clock().now().to_msg()
             detection.header.frame_id = str(self.counter)
 
-            hypothesises = []
+            hypothesis = ObjectHypothesisWithPose()
+            hypothesis.id = result['labels'][i].item()
+            hypothesis.score = result['scores'][i].item()
+            hypothesis.pose.pose.position.x = result['boxes'][i][0].item()
+            hypothesis.pose.pose.position.y = result['boxes'][i][1].item()
 
-            for _class in range(len(logits[i])):
-                hypothesis = ObjectHypothesisWithPose()
-                hypothesis.id = _class
-                hypothesis.score = logits[_class].item()
-                hypothesis.pose.pose.position.x = boxes[i][0].item()
-                hypothesis.pose.pose.position.y = boxes[i][1].item()
-                hypothesises.append(hypothesis)
+            detection.results = [hypothesis]
 
-            detection.results = hypothesises
-
-            detection.bbox.center.x = boxes[i][0].item()
-            detection.bbox.center.y = boxes[i][1].item()
+            detection.bbox.center.x = result['boxes'][i][0].item()
+            detection.bbox.center.y = result['boxes'][i][1].item()
             detection.bbox.center.theta = 0.0
 
-            detection.bbox.size_x = boxes[i][2].item()
-            detection.bbox.size_y = boxes[i][3].item()
+            detection.bbox.size_x = result['boxes'][i][2].item()
+            detection.bbox.size_y = result['boxes'][i][3].item()
 
             detections.append(detection)
+    
 
         dda.detections = detections
         dda.header.stamp = self.get_clock().now().to_msg()
@@ -103,14 +96,14 @@ class RosIO(Node):
         bridge = CvBridge()
         cv_image: numpy.ndarray = bridge.imgmsg_to_cv2(msg)
         converted_image = PilImage.fromarray(numpy.uint8(cv_image), 'RGB')
-        logits, boxes = str(predict(converted_image))
+        result = predict(converted_image)
         print(f'Predicted Bounding Boxes')
 
         if self.get_parameter('pub_image').value:
             self.image_publisher.publish(msg)
 
         if self.get_parameter('pub_boxes').value:
-            detections = self.get_detection_arr(logits, boxes)
+            detections = self.get_detection_arr(result)
             self.detection_publisher.publish(detections)
 
         
