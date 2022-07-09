@@ -8,6 +8,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 from std_msgs.msg import String
+import cv2
 from cv_bridge import CvBridge
 
 ALGO_VERSION = os.getenv("MODEL_NAME")
@@ -63,6 +64,8 @@ class RosIO(Node):
             1
         )
 
+        self.get_logger("Initialized Node")
+
     def get_detection_arr(self, df):
         dda = Detection2DArray()
 
@@ -80,6 +83,7 @@ class RosIO(Node):
             hypothesises.append(hypothesis)
             detection.results = hypothesises
             detection.results[0].score = row.confidence
+            # this code will have to change
             detection.results[0].pose.pose.position.x = (int(row.xmin) + int(row.xmax)) / 2
             detection.results[0].pose.pose.position.y = (int(row.ymin) + int(row.ymax)) / 2
 
@@ -95,6 +99,7 @@ class RosIO(Node):
         dda.detections = detections
         dda.header.stamp = self.get_clock().now().to_msg()
         dda.header.frame_id = str(self.counter)
+
         return dda
 
 
@@ -110,6 +115,7 @@ class RosIO(Node):
         label_index, prediction, boxes = str(predict(converted_image))
         print(f'Result: {result}')
 
+        # send back resized images
         if self.get_parameter('pub_image').value:
             processed_image = self.br.cv2_to_imgmsg(results.imgs[0])
             self.image_publisher.publish(processed_image)
@@ -119,25 +125,20 @@ class RosIO(Node):
             json.data = results.pandas().xyxy[0].to_json(orient="records")
             self.json_publisher.publish(json)
 
+        # send back bounding
         if self.get_parameter('pub_boxes').value:
             detections = self.getDetectionArray(boxes.pandas().xyxy[0])
             self.detection_publisher.publish(detections)
 
-        
+        self.get_logger("received image")
 
 
 def main(args=None):
-    print('<name> Started')
-
     rclpy.init(args=args)
-
     minimal_subscriber = RosIO()
 
     rclpy.spin(minimal_subscriber)
 
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
     minimal_subscriber.destroy_node()
     rclpy.shutdown()
 
