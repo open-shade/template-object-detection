@@ -1,6 +1,6 @@
 import numpy
 import os
-from transformers import AutoFeatureExtractor
+from transformers import AutoFeatureExtractor, DetrForObjectDetection
 import torch
 from PIL import Image as PilImage
 import rclpy
@@ -18,27 +18,24 @@ if not ALGO_VERSION:
 
 def predict(image: Image):
     feature_extractor = AutoFeatureExtractor.from_pretrained(ALGO_VERSION)
-    # model = <name>ForImageClassification.from_pretrained(ALGO_VERSION)
-    # Enter line here
+    model = DetrForObjectDetection.from_pretrained(ALGO_VERSION)
 
     inputs = feature_extractor(image, return_tensors="pt")
 
     with torch.no_grad():
         output = model(**inputs)
 
-    logits = output.logits
-    bboxes = output.pred_boxes
-    # model predicts one of the 1000 ImageNet classes
-    predicted_label = logits.argmax(-1).item()
-
-    return predicted_label, model.config.id2label[predicted_label], bboxes
+    # Convert output to be between 0 and 1
+    logits = torch.nn.functional.softmax(output.logits[0], dim=2)
+    bboxes = output.pred_boxes[0]
+    
+    return logits, bboxes
 
 
 class RosIO(Node):
     def __init__(self):
         super().__init__('minimal_subscriber')
         self.declare_parameter('pub_image', False)
-        self.declare_parameter('pub_json', False)
         self.declare_parameter('pub_boxes', True)
         self.image_subscription = self.create_subscription(
             Image,
@@ -52,43 +49,43 @@ class RosIO(Node):
             '/<name>/pub/image',
             1
         )
-        self.json_publisher = self.create_publisher(
-            String,
-            '/<name>/pub/json',
-            1
-        )
+    
         self.detection_publisher = self.create_publisher(
             String,
             '/<name>/pub/detection_boxes',
             1
         )
 
-    def get_detection_arr(self, df):
+    def get_detection_arr(self, logits, boxes):
         dda = Detection2DArray()
 
         detections = []
         self.counter += 1
-
-        for row in df.itertuples():
+        
+        for i in range(len(boxes)):
             detection = Detection2D()
 
             detection.header.stamp = self.get_clock().now().to_msg()
             detection.header.frame_id = str(self.counter)
 
             hypothesises = []
-            hypothesis = ObjectHypothesisWithPose()
-            hypothesises.append(hypothesis)
-            detection.results = hypothesises
-            detection.results[0].score = row.confidence
-            detection.results[0].pose.pose.position.x = (int(row.xmin) + int(row.xmax)) / 2
-            detection.results[0].pose.pose.position.y = (int(row.ymin) + int(row.ymax)) / 2
 
-            detection.bbox.center.x = (int(row.xmin) + int(row.xmax)) / 2
-            detection.bbox.center.y = (int(row.ymin) + int(row.ymax)) / 2
+            for _class in range(len(logits[i])):
+                hypothesis = ObjectHypothesisWithPose()
+                hypothesis.id = _class
+                hypothesis.score = logits[_class].item()
+                hypothesis.pose.pose.position.x = boxes[i][0].item()
+                hypothesis.pose.pose.position.y = boxes[i][1].item()
+                hypothesises.append(hypothesis)
+
+            detection.results = hypothesises
+
+            detection.bbox.center.x = boxes[i][0].item()
+            detection.bbox.center.y = boxes[i][1].item()
             detection.bbox.center.theta = 0.0
 
-            detection.bbox.size_x = (int(row.xmax) - int(row.xmin)) / 2
-            detection.bbox.size_y = (int(row.ymax) - int(row.ymin)) / 2
+            detection.bbox.size_x = boxes[i][2].item()
+            detection.bbox.size_y = boxes[i][3].item()
 
             detections.append(detection)
 
@@ -99,28 +96,17 @@ class RosIO(Node):
 
 
     def listener_callback(self, msg: Image):
-        # self.get_logger().info(msg.data)
         bridge = CvBridge()
         cv_image: numpy.ndarray = bridge.imgmsg_to_cv2(msg)
-        # print(cv_image)
-        # cv2.imshow('image', cv_image)
-        # cv2.waitKey(0)
         converted_image = PilImage.fromarray(numpy.uint8(cv_image), 'RGB')
-        # converted_image.show('image')
-        label_index, prediction, boxes = str(predict(converted_image))
-        print(f'Result: {result}')
+        logits, boxes = str(predict(converted_image))
+        print(f'Predicted Bounding Boxes')
 
         if self.get_parameter('pub_image').value:
-            processed_image = self.br.cv2_to_imgmsg(results.imgs[0])
-            self.image_publisher.publish(processed_image)
-
-        if self.get_parameter('pub_json').value:
-            json = String()
-            json.data = results.pandas().xyxy[0].to_json(orient="records")
-            self.json_publisher.publish(json)
+            self.image_publisher.publish(msg)
 
         if self.get_parameter('pub_boxes').value:
-            detections = self.getDetectionArray(boxes.pandas().xyxy[0])
+            detections = self.get_detection_arr(logits, boxes)
             self.detection_publisher.publish(detections)
 
         
