@@ -62,8 +62,12 @@ class RosIO(Node):
         detections = []
         self.counter += 1
         
-        for i in range(len(boxes)):
+        for i in range(len(logits)):
             detection = Detection2D()
+
+            # don't send boudning boxes that have no object in them
+            if logits[i].argmax(-1).item() == len(logits[i]) - 1:
+                continue
 
             detection.header.stamp = self.get_clock().now().to_msg()
             detection.header.frame_id = str(self.counter)
