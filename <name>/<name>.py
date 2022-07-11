@@ -2,6 +2,7 @@ import numpy
 import os
 from transformers import AutoFeatureExtractor, DetrForObjectDetection
 import torch
+import cv2
 from PIL import Image as PilImage
 import rclpy
 from rclpy.node import Node
@@ -35,8 +36,9 @@ def predict(image: Image):
 class RosIO(Node):
     def __init__(self):
         super().__init__('minimal_subscriber')
-        self.declare_parameter('pub_image', False)
+        self.declare_parameter('pub_image', True)
         self.declare_parameter('pub_boxes', True)
+        self.declare_parameter('pub_detections', True)
         self.image_subscription = self.create_subscription(
             Image,
             '/<name>/sub/image_raw',
@@ -45,12 +47,18 @@ class RosIO(Node):
         )
 
         self.image_publisher = self.create_publisher(
-            String,
+            Image,
             '/<name>/pub/image',
             1
         )
-    
+
         self.detection_publisher = self.create_publisher(
+            String,
+            '/<name>/pub/detections',
+            1
+        )
+    
+        self.boxes_publisher = self.create_publisher(
             String,
             '/<name>/pub/detection_boxes',
             1
@@ -100,11 +108,22 @@ class RosIO(Node):
         print(f'Predicted Bounding Boxes')
 
         if self.get_parameter('pub_image').value:
-            self.image_publisher.publish(msg)
+            for box in result['boxes'].tolist():
+                x = result['boxes'][0]
+                y = result['boxes'][1]
+                w = result['boxes'][2]
+                h = result['boxes'][3]
+                converted_image = cv2.rectangle(converted_image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+            self.image_publisher.publish(bridge.cv2_to_imgmsg(converted_image)
+
+        if self.get_parameter('pub_detections').value:
+            labels: torch.Tensor = result['labels']
+            detections = ' '.join(labels.tolist())
+            self.detection_publisher.publish()
 
         if self.get_parameter('pub_boxes').value:
-            detections = self.get_detection_arr(result)
-            self.detection_publisher.publish(detections)
+            arr = self.get_detection_arr(result)
+            self.boxes_publisher.publish(arr)
 
         
 
